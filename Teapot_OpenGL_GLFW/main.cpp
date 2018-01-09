@@ -10,13 +10,24 @@
 #include "Define.h"
 #include "Utilities.h"
 #include "Shader.h"
+#include "Camera.h"
+#include "Model.h"
 
 #include "SOIL2/SOIL2.h"
 
 void KeyCallback(GLFWwindow *window, int key, int scancode, int action, int mode);
 void MouseCallback(GLFWwindow *window, double xPos, double yPos);
+void ObjMove();
 
 bool keys[1024];
+
+Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+GLfloat lastX = 400;
+GLfloat lastY = 300;
+bool firstMouse = true;
+
+GLfloat deltaTime = 0.0f;
+GLfloat lastTime = 0.0f;
 
 GLFWwindow *window;
 
@@ -76,16 +87,39 @@ int main(int argc, const char * argv[]) {
     
     glEnable(GL_DEPTH_TEST);
     
+    Shader shader("resources/shaders/modelLoading.vs", "resources/shaders/modelLoading.fs");
     
+    Model ourModel("resources/models/teapot.obj");
+    
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    
+    glm::mat4 projection = glm::perspective(camera.GetZoom(), (float)screen.x / (float)screen.y, 0.1f, 100.0f);
     
     while (!glfwWindowShouldClose(window)) {
+        GLfloat currentFrame = glfwGetTime();
+        deltaTime = currentFrame - lastTime;
+        lastTime = currentFrame;
+        
         //キーが押されたりマウスを操作した際、該当する応答機能が何かしら作動したかどうかをチェックする
         glfwPollEvents();
+        ObjMove();
         
         //glViewportで指定した範囲をこれで指定した色で塗り潰す
         glClearColor(0.5f, 0.5f, 1.0f, 1.0f);
         //指定したバッファを特定
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        
+        shader.Use();
+        
+        glm::mat4 view = camera.GetViewMatrix();
+        glUniformMatrix4fv(glGetUniformLocation(shader.program, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(glGetUniformLocation(shader.program, "view"), 1, GL_FALSE, glm::value_ptr(view));
+        
+        glm::mat4 model;
+        model = glm::translate(model, glm::vec3(0.0f, -1.75f, 0.0f));
+        model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));
+        glUniformMatrix4fv(glGetUniformLocation(shader.program, "model"), 1, GL_FALSE, glm::value_ptr(model));
+        ourModel.Draw(shader);
         
         //スクリーンバッファの交換(ダブルバッファのスワップ)
         glfwSwapBuffers(window);
@@ -96,6 +130,24 @@ int main(int argc, const char * argv[]) {
     glfwTerminate();
     
     return 0;
+}
+
+void ObjMove() {
+    if (keys[GLFW_KEY_W] || keys[GLFW_KEY_UP]) {
+        camera.ProcessKeyboard(Camera_Movement::FORWARD, deltaTime);
+    }
+    
+    if (keys[GLFW_KEY_S] || keys[GLFW_KEY_DOWN]) {
+        camera.ProcessKeyboard(Camera_Movement::BACKWARD, deltaTime);
+    }
+    
+    if (keys[GLFW_KEY_A] || keys[GLFW_KEY_RIGHT]) {
+        camera.ProcessKeyboard(Camera_Movement::RIGHT, deltaTime);
+    }
+    
+    if (keys[GLFW_KEY_D] || keys[GLFW_KEY_LEFT]) {
+        camera.ProcessKeyboard(Camera_Movement::LEFT, deltaTime);
+    }
 }
 
 void KeyCallback(GLFWwindow *window, int key, int scancode, int action, int mode) {
@@ -113,5 +165,17 @@ void KeyCallback(GLFWwindow *window, int key, int scancode, int action, int mode
 }
 
 void MouseCallback(GLFWwindow *window, double xPos, double yPos) {
+    if (firstMouse) {
+        lastX = xPos;
+        lastY = yPos;
+        firstMouse = false;
+    }
     
+    GLfloat xOffset = xPos - lastX;
+    GLfloat yOffset = lastY - yPos;
+    
+    lastX = xPos;
+    lastY = yPos;
+    
+    camera.ProcessMouseMovement(xOffset, yOffset);
 }
